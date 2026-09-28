@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Escala da Integração</title>
+  <meta name="theme-color" content="#1f5fbf">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icone-192.png">
+  <link rel="apple-touch-icon" href="icone-192.png">
+  <style>
+  :root { --fundo: #f6f7f9; --cartao: #fff; --texto: #1b1f24; --suave: #5f6b7a; --linha: #dde2e8; --acento: #1f5fbf; --alerta: #b3261e; --ok: #1e7a3c; --no-acento: #fff; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { color-scheme: dark; --fundo: #121417; --cartao: #1c1f24; --texto: #e8eaed; --suave: #9aa4b1; --linha: #2e333a; --acento: #7aa7f0; --alerta: #f28b82; --ok: #81c995; --no-acento: #0f1a2e; }
+  }
+  :root[data-theme="dark"] { color-scheme: dark; --fundo: #121417; --cartao: #1c1f24; --texto: #e8eaed; --suave: #9aa4b1; --linha: #2e333a; --acento: #7aa7f0; --alerta: #f28b82; --ok: #81c995; --no-acento: #0f1a2e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding-bottom: 64px; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--linha); }
+  h1 { font-size: 17px; margin: 0; }
+  h2 { font-size: 14px; margin: 18px 0 6px; color: var(--suave); text-transform: uppercase; letter-spacing: .03em; }
+  main { padding: 8px 16px; max-width: 720px; margin: 0 auto; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--cartao); border-top: 1px solid var(--linha); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  nav button { flex: 1; padding: 14px 4px; border: 0; background: none; color: var(--suave); font: inherit; border-radius: 0; }
+  nav button.ativa { color: var(--acento); font-weight: 600; }
+  .cartao { background: var(--cartao); border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; margin: 6px 0; }
+  .cartao.falta { border-color: var(--alerta); }
+  .cartao.destaque { border-color: var(--acento); }
+  .linha { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .suave { color: var(--suave); }
+  .alerta { color: var(--alerta); font-weight: 600; margin-left: 6px; }
+  .pessoa { display: inline-block; padding: 2px 8px; margin: 3px 2px 0 0; border-radius: 999px; background: var(--fundo); border: 1px solid var(--linha); }
+  .pessoa.eu { border-color: var(--acento); color: var(--acento); font-weight: 600; }
+  .barra { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; }
+  button, input, select { font: inherit; color: inherit; }
+  button { background: var(--acento); color: var(--no-acento); border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+  button.secundario { background: none; color: var(--acento); border: 1px solid var(--linha); }
+  button.pequeno { padding: 4px 10px; font-size: 13px; margin-top: 6px; }
+  input, select { width: 100%; padding: 8px; border: 1px solid var(--linha); border-radius: 8px; background: var(--cartao); margin: 4px 0 10px; }
+  input[type=checkbox] { width: auto; margin: 0 6px 0 0; }
+  label { display: block; font-size: 13px; color: var(--suave); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 3px; border-bottom: 1px solid var(--linha); }
+  th { font-size: 12px; font-weight: 600; color: var(--suave); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.clicavel { cursor: pointer; }
+  pre { white-space: pre-wrap; font-size: 12px; background: var(--fundo); padding: 8px; border-radius: 8px; overflow-x: auto; }
+  #modal, #confirmacao { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; }
+  #confirmacao { z-index: 20; align-items: center; padding: 16px; }
+  #modal[hidden], #confirmacao[hidden], #aviso[hidden] { display: none; }
+  #confirmacao .janela { background: var(--cartao); width: 100%; max-width: 420px; border-radius: 14px; padding: 16px; }
+  #confirmacao .acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 0; }
+  #aviso { position: fixed; left: 16px; right: 16px; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); z-index: 30; max-width: 688px; margin: 0 auto; background: var(--texto); color: var(--fundo); padding: 10px 14px; border-radius: 10px; }
+  #aviso.erro { background: var(--alerta); color: var(--cartao); }
+  #modal .janela { background: var(--cartao); width: 100%; max-width: 720px; max-height: 88vh; overflow: auto; border-radius: 14px 14px 0 0; padding: 16px; }
+  .grelha { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; }
+  .grelha input { min-width: 0; }
+  .escolhas label { display: flex; align-items: center; color: var(--texto); font-size: 15px; padding: 4px 0; }
+</style>
+
+</head>
+<body>
+  <header><h1>Escala da Integração</h1><span id="quem"></span></header>
+  <main id="conteudo"><p class="suave">A carregar…</p></main>
+  <nav id="abas">
+    <button data-aba="escala">Escala</button>
+    <button data-aba="classificacao">Horas</button>
+    <button data-aba="eu">Eu</button>
+    <button data-aba="registo">Registo</button>
+    <button data-aba="gestao" hidden>Gestão</button>
+  </nav>
+  <div id="modal" hidden></div>
+  <div id="confirmacao" hidden></div>
+  <div id="aviso" role="status" hidden></div>
+  
+<script>
+// google.script.run por fetch: o corpo vai como texto simples (sem pedido prévio de CORS) e sem cookies do Google.
+var ENDERECO_API = "https://script.google.com/macros/s/AKfycbxfRFHXKBssE8fk5l3UCkL7NheUWLYdVyh4PABciZrwl9Hm0rVFdPxT82XW8_vJ6YS24A/exec";
+function pedirServidor(nome, args) {
+  return fetch(ENDERECO_API, { method: 'POST', body: JSON.stringify({ fn: nome, args: args }) })
+    .then(r => { if (!r.ok) throw new Error('O servidor não respondeu (' + r.status + '). Tenta outra vez.'); return r.json(); })
+    .catch(e => { throw (e instanceof TypeError ? new Error('Sem ligação ao servidor. Verifica a internet e tenta outra vez.') : e); })
+    .then(r => { if (r.ok) return r.valor; throw new Error(r.erro); });
+}
+// Leituras públicas: mostra logo o que este telemóvel já viu e atualiza quando chega a resposta.
+// Qualquer ação (escrita) apaga esta memória, para o ecrã seguinte vir sempre do servidor.
+var LEITURAS = ['apiDados', 'apiRegisto', 'apiHistorico'], PREFIXO = 'escala-cache:', _pedidoRecente = {};
+function lerCache(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function gravarCache(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function limparCache() { try { Object.keys(localStorage).filter(k => k.indexOf(PREFIXO) === 0).forEach(k => localStorage.removeItem(k)); } catch (e) {} }
+var google = { script: { get run() {
+  let ok = () => {}, falha = () => {};
+  const p = new Proxy({}, { get: (_, nome) => {
+    if (nome === 'withSuccessHandler') return f => { ok = f; return p; };
+    if (nome === 'withFailureHandler') return f => { falha = f; return p; };
+    return (...args) => {
+      if (LEITURAS.indexOf(nome) < 0) {
+        pedirServidor(nome, args).then(v => { limparCache(); ok(v); }, falha);
+        return;
+      }
+      const k = PREFIXO + nome + ':' + JSON.stringify(args), guardado = lerCache(k);
+      if (guardado === null) {
+        pedirServidor(nome, args).then(v => { gravarCache(k, JSON.stringify(v)); _pedidoRecente[k] = Date.now(); ok(v); }, falha);
+        return;
+      }
+      ok(JSON.parse(guardado));
+      if (Date.now() - (_pedidoRecente[k] || 0) < 15000) return;
+      _pedidoRecente[k] = Date.now();
+      pedirServidor(nome, args).then(v => {
+        const texto = JSON.stringify(v);
+        if (texto === guardado) return;
+        gravarCache(k, texto);
+        // Só redesenha ecrãs de consulta, e nunca por cima de uma janela aberta.
+        const aberto = !document.getElementById('modal').hidden || !document.getElementById('confirmacao').hidden;
+        if (['escala', 'classificacao', 'registo'].indexOf(S.aba) >= 0 && !aberto) render();
+      }, () => {});
+    };
+  } });
+  return p;
+} } };
+</script>
+<script>
+const S = { aba: 'escala', segunda: null, dados: null, sessao: null };
+try { S.sessao = JSON.parse(localStorage.getItem('sessao')); } catch (e) { S.sessao = null; }
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Ids e datas dentro de onclick: só letras, algarismos e hífen (esc() não protege contexto JavaScript).
+const idj = s => String(s === null || s === undefined ? '' : s).replace(/[^A-Za-z0-9_-]/g, '');
+const fmt = n => String(Math.round(n * 10) / 10).replace('.', ',');
+const ORIGENS = { voluntario: 'voluntário', pontos: 'pontos', reatribuicao: 'reatribuído', manual: 'manual', troca: 'troca' };
+
+// Ações (tudo o que não é só consulta) mostram um aviso enquanto o servidor trabalha e não deixam carregar duas vezes.
+const SO_LEITURA = ['apiDados', 'apiRegisto', 'apiHistorico', 'apiEu', 'apiGestao', 'apiTextoSemana'];
+function chamar(fn, ...args) {
+  const acao = SO_LEITURA.indexOf(fn) < 0;
+  if (acao && S.ocupado) return Promise.reject(new Error('Espera que a ação anterior termine.'));
+  if (acao) { S.ocupado = true; avisar('Um momento… o servidor pode demorar alguns segundos.', false, true); }
+  const fim = () => { if (!acao) return; S.ocupado = false; if ($('#aviso').dataset.fixo) $('#aviso').hidden = true; };
+  return new Promise((ok, falha) => {
+    google.script.run.withSuccessHandler(v => { fim(); ok(v); }).withFailureHandler(err => {
+      fim();
+      falha(err);
+      // Sessão expirada (PIN redefinido, cadete desativado): volta ao ecrã de entrada em vez de ficar em "A carregar…".
+      if (/Sessão inválida/.test(err.message)) { guardarSessao(null); setTimeout(() => mudarAba('eu'), 0); }
+      if (/escolher o teu PIN/.test(err.message) && S.sessao) { S.sessao.provisorio = true; setTimeout(() => mudarAba('eu'), 0); }
+    })[fn](...args);
+  });
+}
+function guardarSessao(s) {
+  S.sessao = s;
+  try { s ? localStorage.setItem('sessao', JSON.stringify(s)) : localStorage.removeItem('sessao'); } catch (e) {}
+  atualizarCabecalho();
+}
+function token() { return S.sessao && S.sessao.token; }
+function atualizarCabecalho() {
+  $('#quem').textContent = S.sessao ? S.sessao.nome : '';
+  document.querySelector('[data-aba=gestao]').hidden = !(S.sessao && S.sessao.admin);
+}
+// Avisos e confirmações dentro da página: alert() e confirm() não funcionam em todos os sítios onde a app abre.
+// fixo = fica até a ação terminar (não desaparece sozinho).
+function avisar(msg, erro, fixo) {
+  const a = $('#aviso');
+  a.textContent = msg;
+  a.classList.toggle('erro', !!erro);
+  a.hidden = false;
+  clearTimeout(avisar._t);
+  if (fixo) { a.dataset.fixo = '1'; return; }
+  delete a.dataset.fixo;
+  avisar._t = setTimeout(() => { a.hidden = true; }, erro ? 7000 : 4000);
+}
+function confirmar(msg, sim) {
+  return new Promise(resolve => {
+    const c = $('#confirmacao');
+    c.innerHTML = '<div class="janela"><p>' + esc(msg) + '</p><p class="acoes"><button id="conf-sim">' + esc(sim || 'Confirmar') + '</button> <button class="secundario" id="conf-nao">Voltar</button></p></div>';
+    c.hidden = false;
+    const fim = v => { c.hidden = true; c.innerHTML = ''; resolve(v); };
+    $('#conf-sim').onclick = () => fim(true);
+    $('#conf-nao').onclick = () => fim(false);
+  });
+}
+async function tentar(fn) { try { await fn(); } catch (e) { avisar(e.message, true); } }
+function mudarAba(a) {
+  S.aba = a;
+  document.querySelectorAll('#abas button').forEach(b => b.classList.toggle('ativa', b.dataset.aba === a));
+  render();
+}
+async function render() {
+  const vistas = { escala: verEscala, classificacao: verClassificacao, eu: verEu, registo: verRegisto, gestao: verGestao };
+  $('#conteudo').innerHTML = '<p class="suave">A carregar…</p>';
+  await tentar(vistas[S.aba]);
+}
+async function carregarDados() { S.dados = await chamar('apiDados', S.segunda); S.segunda = S.dados.segunda; }
+
+function abrirModal(html) {
+  $('#modal').innerHTML = '<div class="janela">' + html + '<p><button class="secundario" onclick="fecharModal()">Fechar</button></p></div>';
+  $('#modal').hidden = false;
+}
+function fecharModal() { $('#modal').hidden = true; $('#modal').innerHTML = ''; }
+function partilhar(texto, aviso) {
+  abrirModal('<h2>Partilhar</h2>' + (aviso ? '<p class="alerta" style="margin-left:0">' + esc(aviso) + '</p>' : '') + '<pre>' + esc(texto) + '</pre>' +
+    '<p><a href="https://wa.me/?text=' + encodeURIComponent(texto) + '" target="_blank" rel="noopener"><button>Abrir no WhatsApp</button></a> ' +
+    '<button class="secundario" id="copiar">Copiar</button></p>');
+  // Se a cópia automática for recusada, seleciona o texto para copiar à mão.
+  $('#copiar').onclick = () => navigator.clipboard.writeText(texto).then(() => { $('#copiar').textContent = 'Copiado'; })
+    .catch(() => { const r = document.createRange(); r.selectNodeContents($('#modal pre')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); avisar('Texto selecionado: copia-o à mão.'); });
+}
+
+// ---------- Escala ----------
+function mudarSemana(n) {
+  const p = S.segunda.split('-').map(Number);
+  S.segunda = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
+  render();
+}
+async function verEscala() {
+  await carregarDados();
+  const d = S.dados, eu = S.sessao && S.sessao.id, admin = S.sessao && S.sessao.admin;
+  let h = '<div class="barra"><button class="secundario" onclick="mudarSemana(-7)">‹</button><strong>Semana de ' + esc(d.dias[0].rotulo) + '</strong><button class="secundario" onclick="mudarSemana(7)">›</button></div>';
+  if (eu) {
+    const minhas = [];
+    d.dias.forEach(dia => dia.tarefas.forEach(t => { if (t.pessoas.some(p => p.cadete_id === eu)) minhas.push(dia.rotulo + ' ' + t.hora_inicio + ' — ' + t.nome); }));
+    if (minhas.length) h += '<div class="cartao destaque"><strong>As minhas tarefas</strong><br>' + minhas.map(esc).join('<br>') + '</div>';
+  }
+  d.dias.forEach(dia => {
+    if (!dia.tarefas.length) return;
+    h += '<h2>' + esc(dia.rotulo) + (dia.feriado ? ' · feriado' : '') + '</h2>';
+    dia.tarefas.forEach(t => {
+      h += '<div class="cartao' + (t.faltam ? ' falta' : '') + '"><div class="linha"><span><strong>' + esc(t.hora_inicio) + '</strong> ' + esc(t.nome) + '</span>' +
+        '<span class="suave">' + fmt(t.pontos) + ' pts' + (t.estado === 'confirmada' ? ' ✓' : '') + '</span></div><div>' +
+        t.pessoas.map(p => '<span class="pessoa' + (p.cadete_id === eu ? ' eu' : '') + '">' + esc(p.nome) + '</span>').join('') +
+        (t.faltam ? '<span class="alerta">faltam ' + t.faltam + '</span>' : '') + '</div>' +
+        (admin ? '<button class="pequeno secundario" onclick="editarTarefa(\'' + idj(t.id) + '\')">Editar</button>' : '') + '</div>';
+    });
+  });
+  if (!d.dias.some(x => x.tarefas.length)) h += '<p class="suave">Sem tarefas nesta semana.</p>';
+  $('#conteudo').innerHTML = h;
+}
+
+// ---------- Horas ----------
+async function verClassificacao() {
+  await carregarDados();
+  const eu = S.sessao && S.sessao.id;
+  let h = '<p class="suave">Ordenado de quem tem mais para quem tem menos. Toca num nome para ver o histórico.</p><table><tr><th>#</th><th>Nome</th><th class="num">Feitas</th><th class="num">Marc.</th><th class="num">Total</th><th class="num">±méd.</th></tr>';
+  S.dados.classificacao.forEach(l => {
+    h += '<tr class="clicavel" onclick="historico(\'' + idj(l.id) + '\')"' + (l.id === eu ? ' style="font-weight:600"' : '') + '><td>' + l.posicao + '</td><td>' + esc(l.nome) + '</td><td class="num">' + fmt(l.confirmados) +
+      '</td><td class="num">' + fmt(l.agendados) + '</td><td class="num">' + fmt(l.total) + '</td><td class="num">' + (l.diferenca > 0 ? '+' : '') + fmt(l.diferenca) + '</td></tr>';
+  });
+  $('#conteudo').innerHTML = h + '</table>';
+}
+async function historico(id) {
+  await tentar(async () => {
+    const r = await chamar('apiHistorico', id);
+    abrirModal('<h2>' + esc(r.nome) + '</h2>' + (r.linhas.length ? '<table>' + r.linhas.map(l =>
+      '<tr><td>' + esc(l.data.slice(8) + '/' + l.data.slice(5, 7)) + ' ' + esc(l.hora_inicio) + '</td><td>' + esc(l.nome) + '<br><span class="suave">' + esc(ORIGENS[l.origem] || l.origem) +
+      (l.estado === 'confirmada' ? ' · feita' : ' · marcada') + '</span></td><td class="num">' + fmt(l.pontos) + '</td></tr>').join('') + '</table>' : '<p class="suave">Sem tarefas.</p>'));
+  });
+}
+
+// ---------- Registo ----------
+async function verRegisto() {
+  const linhas = await chamar('apiRegisto');
+  let h = '<p class="suave">Todas as decisões do sistema e dos administradores. Os sorteios mostram os candidatos, os pontos de cada um e a semente.</p>';
+  linhas.forEach(l => {
+    let det = l.detalhe;
+    try { det = JSON.stringify(JSON.parse(l.detalhe), null, 1); } catch (e) {}
+    h += '<div class="cartao"><div class="linha"><strong>' + esc(l.acao) + '</strong><span class="suave">' + esc(l.quando.replace('T', ' ')) + '</span></div>' +
+      '<span class="suave">' + esc(l.autor) + '</span>' + (det && det !== '{}' ? '<details><summary>Detalhe</summary><pre>' + esc(det) + '</pre></details>' : '') + '</div>';
+  });
+  $('#conteudo').innerHTML = linhas.length ? h : '<p class="suave">Ainda não há registo.</p>';
+}
+
+// ---------- Eu ----------
+async function verEu() {
+  if (!S.sessao) return verEntrar();
+  if (S.sessao.provisorio) return verEscolherPin();
+  if (!S.dados) await carregarDados();
+  const r = await chamar('apiEu', token());
+  const outros = S.dados.cadetes.filter(c => c.id !== r.eu.id);
+  let h = '<h2>As minhas próximas tarefas</h2>';
+  h += r.tarefas.length ? r.tarefas.map(t => '<div class="cartao"><div class="linha"><span><strong>' + esc(t.rotulo) + ' ' + esc(t.hora_inicio) + '</strong> ' + esc(t.nome) + '</span><span class="suave">' + fmt(t.pontos) + ' pts</span></div>' +
+    '<select id="troca-' + esc(t.tarefa_id) + '"><option value="">Pedir troca a…</option>' + outros.map(c => '<option value="' + esc(c.id) + '">' + esc(c.nome) + '</option>').join('') + '</select>' +
+    '<button class="pequeno" onclick="pedirTroca(\'' + idj(t.tarefa_id) + '\')">Pedir troca</button></div>').join('') : '<p class="suave">Nenhuma.</p>';
+  if (r.trocasRecebidas.length) {
+    h += '<h2>Pedidos de troca para ti</h2>' + r.trocasRecebidas.map(x => '<div class="cartao">' + esc(x.texto) +
+      '<br><button class="pequeno" onclick="responderTroca(\'' + idj(x.id) + '\', true)">Aceitar</button> <button class="pequeno secundario" onclick="responderTroca(\'' + idj(x.id) + '\', false)">Recusar</button></div>').join('');
+  }
+  if (r.trocasEnviadas.length) h += '<h2>Trocas que pediste</h2>' + r.trocasEnviadas.map(x => '<div class="cartao suave">' + esc(x.texto) + '</div>').join('');
+  h += '<h2>Marcar indisponibilidade</h2><div class="cartao"><div class="grelha"><div><label>De</label><input type="date" id="ind-de"></div><div><label>Até</label><input type="date" id="ind-ate"></div></div>' +
+    '<label>Motivo (opcional)</label><input id="ind-motivo" maxlength="200"><button onclick="marcarIndisponivel()">Marcar</button></div>';
+  h += '<h2>Quero fazer — semana de ' + esc(r.queroSemana.slice(8) + '/' + r.queroSemana.slice(5, 7)) + '</h2><div class="cartao escolhas"><p class="suave">Marca o que preferes fazer. O plano de domingo às ' + S.dados.cfg.hora_plano + 'h00 coloca-te primeiro' + (S.dados.cfg.limite_dia > 0 || S.dados.cfg.limite_semana > 0 ? ', dentro dos limites de tarefas fixas' : '') + '.</p>' +
+    r.opcoesQuero.map(o => '<label><input type="checkbox" ' + (o.marcado ? 'checked ' : '') + 'onchange="alternarQuero(this, \'' + idj(o.atividade_id) + '\', \'' + idj(o.data) + '\', \'' + idj(o.marcado) + '\')">' + esc(o.rotulo) + ' — ' + esc(o.nome) + '</label>').join('') + '</div>';
+  h += '<h2>As minhas marcações</h2>' + (r.disponibilidade.length ? r.disponibilidade.map(d => '<div class="cartao linha"><span>' + esc(d.texto) + '</span><button class="pequeno secundario" onclick="removerDisp(\'' + idj(d.id) + '\')">Remover</button></div>').join('') : '<p class="suave">Nenhuma.</p>');
+  h += '<h2>Mudar o meu PIN</h2><div class="cartao"><label>PIN atual</label><input id="mp-atual" type="password" inputmode="numeric" autocomplete="off">' +
+    '<div class="grelha"><div><label>PIN novo (6 a 8 algarismos)</label><input id="mp-novo" type="password" inputmode="numeric" autocomplete="off"></div>' +
+    '<div><label>Repete o PIN novo</label><input id="mp-rep" type="password" inputmode="numeric" autocomplete="off"></div></div>' +
+    '<button onclick="mudarPin()">Mudar PIN</button></div>';
+  h += '<p><button class="secundario" onclick="guardarSessao(null); render()">Sair</button></p>';
+  $('#conteudo').innerHTML = h;
+}
+async function verEntrar() {
+  if (!S.dados) await carregarDados();
+  $('#conteudo').innerHTML = '<h2>Entrar</h2><div class="cartao"><label>Nome</label><select id="entrar-id">' + S.dados.cadetes.map(c => '<option value="' + esc(c.id) + '">' + esc(c.nome) + '</option>').join('') + '</select>' +
+    '<label>PIN</label><input id="entrar-pin" type="password" inputmode="numeric" autocomplete="off"><button id="entrar-ok">Entrar</button>' +
+    '<p class="suave">Primeira vez? Entra com o PIN inicial que foi dito no grupo. A seguir escolhes o teu.</p></div>';
+  $('#entrar-ok').onclick = () => tentar(async () => {
+    const pin = $('#entrar-pin').value;
+    guardarSessao(await chamar('apiEntrar', $('#entrar-id').value, pin));
+    S.pinAtual = pin; // só em memória, para o ecrã de escolher o PIN não o pedir outra vez
+    render();
+  });
+}
+// Com o PIN inicial (ou um PIN redefinido pelo administrador) só se pode escolher um PIN novo.
+function verEscolherPin() {
+  $('#conteudo').innerHTML = '<h2>Escolhe o teu PIN</h2><div class="cartao"><p>Olá, ' + esc(S.sessao.nome) + '. Antes de continuar, escolhe um PIN só teu, com 6 a 8 algarismos. Não o partilhes.</p>' +
+    (S.pinAtual ? '' : '<label>PIN com que entraste</label><input id="mp-atual" type="password" inputmode="numeric" autocomplete="off">') +
+    '<label>PIN novo</label><input id="mp-novo" type="password" inputmode="numeric" autocomplete="off">' +
+    '<label>Repete o PIN novo</label><input id="mp-rep" type="password" inputmode="numeric" autocomplete="off">' +
+    '<button onclick="mudarPin()">Guardar o meu PIN</button> <button class="secundario" onclick="guardarSessao(null); render()">Sair</button></div>';
+}
+function mudarPin() {
+  const atual = S.pinAtual || val('mp-atual'), novo = val('mp-novo');
+  if (novo !== val('mp-rep')) return avisar('Os dois PINs novos não são iguais.', true);
+  tentar(async () => {
+    guardarSessao(await chamar('apiMudarPin', token(), atual, novo));
+    S.pinAtual = null;
+    avisar('PIN guardado.');
+    mudarAba('escala');
+  });
+}
+function pedirTroca(tarefaId) {
+  const para = $('#troca-' + tarefaId).value;
+  if (!para) return avisar('Escolhe a quem pedir.', true);
+  tentar(async () => { await chamar('apiPedirTroca', token(), tarefaId, para); render(); });
+}
+function responderTroca(id, aceitar) { tentar(async () => { await chamar('apiResponderTroca', token(), id, aceitar); render(); }); }
+function marcarIndisponivel() {
+  tentar(async () => {
+    const r = await chamar('apiIndisponivel', token(), $('#ind-de').value, $('#ind-ate').value, $('#ind-motivo').value);
+    avisar(r.reatribuidas ? 'Marcado. ' + r.reatribuidas + ' tarefa(s) tua(s) passaram para outra pessoa.' : 'Marcado.');
+    render();
+  });
+}
+function alternarQuero(caixa, atividadeId, data, marcado) {
+  tentar(async () => {
+    if (caixa.checked) await chamar('apiQueroFazer', token(), atividadeId, data);
+    else await chamar('apiRemoverDisponibilidade', token(), marcado);
+    render();
+  });
+}
+function removerDisp(id) { tentar(async () => { await chamar('apiRemoverDisponibilidade', token(), id); render(); }); }
+
+// ---------- Gestão ----------
+async function verGestao() {
+  const g = await chamar('apiGestao', token());
+  if (!S.dados) await carregarDados();
+  let h = '';
+  if (g.alertas.length) h += '<h2>Vagas por preencher</h2>' + g.alertas.map(a => '<div class="cartao falta">' + esc(a.data.slice(8) + '/' + a.data.slice(5, 7)) + ' ' + esc(a.hora_inicio) + ' ' + esc(a.nome) + '<span class="alerta">faltam ' + a.faltam + '</span></div>').join('');
+
+  h += '<h2>Nova tarefa extra</h2><div class="cartao"><label>Nome</label><input id="ex-nome" placeholder="Receção do 1.º ano">' +
+    '<div class="grelha"><div><label>Data</label><input type="date" id="ex-data"></div><div><label>Hora</label><input type="time" id="ex-hora"></div>' +
+    '<div><label>Duração (h)</label><input id="ex-dur" inputmode="decimal" placeholder="4"></div><div><label>Pessoas</label><input id="ex-vagas" inputmode="numeric" placeholder="4"></div></div>' +
+    '<details><summary>Voluntários que responderam no WhatsApp</summary><div class="escolhas">' +
+    g.cadetes.filter(c => c.ativo).map(c => '<label><input type="checkbox" class="ex-vol" value="' + esc(c.id) + '">' + esc(c.nome) + '</label>').join('') + '</div></details>' +
+    '<p><button onclick="criarExtra()">Preencher</button></p></div>';
+
+  h += '<h2>Registar tarefa já feita</h2><div class="cartao"><p class="suave">Para uma tarefa que já aconteceu e não foi apontada. Escolhe quem a fez: fica logo feita e conta pontos. Para acrescentar alguém a uma tarefa que já está na escala, usa "Editar".</p>' +
+    '<label>Nome</label><input id="rf-nome" placeholder="Receção do 1.º ano">' +
+    '<div class="grelha"><div><label>Data</label><input type="date" id="rf-data"></div><div><label>Hora</label><input type="time" id="rf-hora"></div>' +
+    '<div><label>Duração (h)</label><input id="rf-dur" inputmode="decimal" placeholder="4"></div></div>' +
+    '<details><summary>Quem fez a tarefa</summary><div class="escolhas">' +
+    g.cadetes.filter(c => c.ativo).map(c => '<label><input type="checkbox" class="rf-p" value="' + esc(c.id) + '">' + esc(c.nome) + '</label>').join('') + '</div></details>' +
+    '<p><button onclick="registarFeita()">Registar</button></p></div>';
+
+  h += '<h2>Semana em vista (' + esc(S.segunda.slice(8) + '/' + S.segunda.slice(5, 7)) + ')</h2><div class="cartao"><p class="suave">Muda a semana no separador Escala.</p>' +
+    '<button onclick="gerarSemana()">Gerar / regenerar</button> <button class="secundario" onclick="partilharSemana()">Partilhar no WhatsApp</button></div>';
+
+  h += '<h2>Dias sem integração</h2><div class="cartao"><p class="suave">Cancela as tarefas desses dias que ainda não começaram (deixam de contar pontos) e o plano de domingo não as cria. Para um só dia de uma só tarefa, usa "Editar" na Escala.</p>' +
+    '<div class="grelha"><div><label>De</label><input type="date" id="pa-de"></div><div><label>Até</label><input type="date" id="pa-ate"></div></div>' +
+    '<label>Motivo (opcional)</label><input id="pa-motivo" maxlength="100" placeholder="Férias de Natal">' +
+    '<div class="escolhas">' + g.atividades.filter(a => a.ativa).map(a => '<label><input type="checkbox" class="pa-at" value="' + esc(a.id) + '" checked>' + esc(a.nome) + '</label>').join('') +
+    '<label><input type="checkbox" id="pa-extras">Também as tarefas extra já marcadas</label></div>' +
+    '<p><button onclick="criarPausa()">Cancelar estes dias</button></p></div>' +
+    g.pausas.map(p => '<div class="cartao linha"><span>' + esc(p.texto) + '</span><button class="pequeno secundario" onclick="removerPausa(\'' + idj(p.id) + '\')">Remover</button></div>').join('');
+
+  h += '<h2>Definições</h2><div class="cartao"><div class="grelha"><div><label>Máx. fixas por dia (0 = sem limite)</label><input id="cfg-dia" inputmode="numeric" value="' + esc(g.cfg.limite_dia) + '"></div>' +
+    '<div><label>Máx. fixas por semana (0 = sem limite)</label><input id="cfg-semana" inputmode="numeric" value="' + esc(g.cfg.limite_semana) + '"></div>' +
+    '<div><label>Multiplicador fim de semana/feriado</label><input id="cfg-mult" inputmode="decimal" value="' + esc(fmt(g.cfg.multiplicador)) + '"></div>' +
+    '<div><label>Hora do plano de domingo</label><input id="cfg-hora" inputmode="numeric" value="' + esc(g.cfg.hora_plano) + '"></div></div><p class="suave">Os limites só contam tarefas fixas; as extras podem acumular na mesma pessoa. Se faltar gente, a vaga é preenchida na mesma por quem tem menos pontos.</p><button onclick="guardarConfig()">Guardar</button></div>';
+
+  h += '<h2>Atividades fixas</h2><p class="suave">Dias: 1 = segunda … 5 = sexta, 6 = sábado, 0 = domingo. As alterações contam a partir do plano seguinte.</p>' +
+    g.atividades.concat([{ id: '', nome: '', hora_inicio: '', duracao_h: '', pessoas: '', dias_semana: '1,2,3,4,5', ativa: true }]).map((a, i) =>
+      '<div class="cartao"><label>Nome</label><input id="at-nome-' + i + '" value="' + esc(a.nome) + '" placeholder="Nova atividade">' +
+      '<div class="grelha"><div><label>Hora</label><input type="time" id="at-hora-' + i + '" value="' + esc(a.hora_inicio) + '"></div><div><label>Duração (h)</label><input id="at-dur-' + i + '" inputmode="decimal" value="' + esc(a.duracao_h === '' ? '' : fmt(a.duracao_h)) + '"></div>' +
+      '<div><label>Pessoas</label><input id="at-pes-' + i + '" inputmode="numeric" value="' + esc(a.pessoas) + '"></div><div><label>Dias</label><input id="at-dias-' + i + '" value="' + esc(a.dias_semana) + '"></div></div>' +
+      '<label class="escolhas"><input type="checkbox" id="at-ativa-' + i + '" ' + (a.ativa ? 'checked' : '') + '>Ativa</label>' +
+      '<button class="pequeno" onclick="guardarAtividade(' + i + ', \'' + idj(a.id) + '\')">' + (a.id ? 'Guardar' : 'Criar') + '</button></div>').join('');
+
+  h += '<h2>Cadetes</h2><p class="suave">Para desativar alguém, desmarca "Ativo" e carrega em Guardar: as tarefas futuras passam para outros e sai da tabela de horas. Para voltar a ativar, marca de novo. Quem ainda não escolheu o seu PIN aparece com "PIN por mudar"; ao escrever um PIN novo para alguém, essa pessoa terá de o mudar quando entrar.</p>' +
+    (g.cadetes.some(c => c.ativo && c.pin_provisorio) ? '<p><strong>' + g.cadetes.filter(c => c.ativo && c.pin_provisorio).length + '</strong> cadete(s) ainda com PIN por mudar.</p>' : '') +
+    g.cadetes.map(c => '<div class="cartao"><div class="linha"><strong>' + esc(c.nome) + (c.pin_provisorio ? ' <span class="alerta">PIN por mudar</span>' : '') + '</strong>' +
+    '<span class="escolhas"><label><input type="checkbox" id="cd-ativo-' + esc(c.id) + '" ' + (c.ativo ? 'checked' : '') + '>Ativo</label><label><input type="checkbox" id="cd-admin-' + esc(c.id) + '" ' + (c.admin ? 'checked' : '') + '>Admin</label></span></div>' +
+    '<input id="cd-pin-' + esc(c.id) + '" inputmode="numeric" placeholder="Novo PIN, 6 algarismos (vazio = manter)"><button class="pequeno" onclick="guardarCadete(\'' + idj(c.id) + '\')">Guardar</button></div>').join('');
+
+  h += '<h2>Feriados</h2>' + g.feriados.map(f => '<div class="cartao linha"><span>' + esc(f.data) + ' — ' + esc(f.nome) + '</span><button class="pequeno secundario" onclick="removerFeriado(\'' + idj(f.id) + '\')">Remover</button></div>').join('') +
+    '<div class="cartao"><div class="grelha"><div><label>Data</label><input type="date" id="fe-data"></div><div><label>Nome</label><input id="fe-nome"></div></div><button class="pequeno" onclick="adicionarFeriado()">Adicionar</button></div>';
+  $('#conteudo').innerHTML = h;
+}
+
+const val = id => $('#' + id).value;
+function acaoAdmin(fn, ...args) { return tentar(async () => { const r = await chamar(fn, token(), ...args); if (r && r.texto) partilhar(r.texto, r.aviso); render(); }); }
+function criarExtra() {
+  acaoAdmin('apiCriarExtra', { nome: val('ex-nome'), data: val('ex-data'), hora_inicio: val('ex-hora'), duracao: val('ex-dur'), vagas: val('ex-vagas'),
+    voluntarios: [...document.querySelectorAll('.ex-vol:checked')].map(c => c.value) });
+}
+async function registarFeita() {
+  tentar(async () => {
+    const r = await chamar('apiRegistarFeita', token(), { nome: val('rf-nome'), data: val('rf-data'), hora_inicio: val('rf-hora'), duracao: val('rf-dur'),
+      pessoas: [...document.querySelectorAll('.rf-p:checked')].map(c => c.value) });
+    avisar('Tarefa registada para ' + r.pessoas + ' pessoa(s).');
+    render();
+  });
+}
+async function gerarSemana() { if (await confirmar('Gerar ou regenerar a semana de ' + S.segunda + '? Trocas e ajustes manuais mantêm-se.', 'Gerar')) acaoAdmin('apiGerarSemana', S.segunda); }
+function partilharSemana() { tentar(async () => partilhar(await chamar('apiTextoSemana', S.segunda))); }
+function guardarConfig() { acaoAdmin('apiGuardarConfig', { limite_dia: val('cfg-dia'), limite_semana: val('cfg-semana'), multiplicador: val('cfg-mult'), hora_plano: val('cfg-hora') }); }
+function guardarAtividade(i, id) {
+  acaoAdmin('apiGuardarAtividade', { id: id, nome: val('at-nome-' + i), hora_inicio: val('at-hora-' + i), duracao_h: val('at-dur-' + i), pessoas: val('at-pes-' + i), dias_semana: val('at-dias-' + i), ativa: $('#at-ativa-' + i).checked });
+}
+async function guardarCadete(id) {
+  const ativo = $('#cd-ativo-' + id).checked;
+  if (!ativo && !(await confirmar('Desativar este cadete? As tarefas futuras dele passam para outros.', 'Desativar'))) return;
+  acaoAdmin('apiGuardarCadete', { id: id, ativo: ativo, admin: $('#cd-admin-' + id).checked, pin: val('cd-pin-' + id).trim() });
+}
+async function criarPausa() {
+  const atividades = [...document.querySelectorAll('.pa-at:checked')].map(c => c.value), extras = $('#pa-extras').checked;
+  const de = val('pa-de'), ate = val('pa-ate') || de;
+  if (!(await confirmar('Cancelar ' + (atividades.length ? 'as tarefas fixas escolhidas' : '') + (atividades.length && extras ? ' e ' : '') + (extras ? 'as extras' : '') + ' de ' + de + ' a ' + ate + '? Deixam de contar pontos.', 'Cancelar estes dias'))) return;
+  tentar(async () => {
+    const r = await chamar('apiPausa', token(), { de: de, ate: ate, atividades: atividades, extras: extras, motivo: val('pa-motivo') });
+    avisar(r.canceladas + ' tarefa(s) cancelada(s).');
+    render();
+  });
+}
+async function removerPausa(id) {
+  if (!(await confirmar('Remover este período? As tarefas fixas desses dias voltam a ser criadas e preenchidas.', 'Remover'))) return;
+  tentar(async () => { const r = await chamar('apiPausa', token(), { id: id, remover: true }); avisar(r.recriadas + ' tarefa(s) criada(s) de novo.'); render(); });
+}
+function adicionarFeriado() { acaoAdmin('apiFeriado', { data: val('fe-data'), nome: val('fe-nome') }); }
+function removerFeriado(id) { acaoAdmin('apiFeriado', { id: id, remover: true }); }
+
+function editarTarefa(id) {
+  let t = null;
+  S.dados.dias.forEach(d => d.tarefas.forEach(x => { if (x.id === id) t = x; }));
+  if (!t) return;
+  const opcoes = S.dados.cadetes.map(c => '<option value="' + esc(c.id) + '">' + esc(c.nome) + '</option>').join('');
+  abrirModal('<h2>' + esc(t.nome) + '</h2><div class="grelha"><div><label>Hora</label><input type="time" id="ed-hora" value="' + esc(t.hora_inicio) + '"></div>' +
+    '<div><label>Duração prevista (h)</label><input id="ed-dur" inputmode="decimal" value="' + esc(fmt(t.duracao_prevista_h)) + '"></div>' +
+    '<div><label>Pessoas</label><input id="ed-vagas" inputmode="numeric" value="' + esc(t.vagas) + '"></div>' +
+    '<div><label>Horas reais (vazio = previstas)</label><input id="ed-reais" inputmode="decimal" value="' + esc(t.horas_reais_h === null ? '' : fmt(t.horas_reais_h)) + '"></div></div>' +
+    '<button id="ed-guardar">Guardar</button><h2>Pessoas</h2>' +
+    t.pessoas.map(p => '<div class="cartao"><div class="linha"><span>' + esc(p.nome) + '</span><span class="suave">' + esc(ORIGENS[p.origem] || p.origem) + '</span></div>' +
+      '<select id="sub-' + esc(p.id) + '"><option value="">Substituir por…</option>' + opcoes + '</select><button class="pequeno" onclick="substituir(\'' + idj(p.id) + '\')">Substituir</button></div>').join('') +
+    '<div class="cartao"><label>Acrescentar pessoa que também fez esta tarefa</label><select id="ed-mais"><option value="">Escolhe…</option>' + opcoes + '</select><button class="pequeno" id="ed-acrescentar">Acrescentar</button></div>' +
+    '<p><button class="secundario" id="ed-cancelar">Cancelar tarefa</button></p>');
+  $('#ed-acrescentar').onclick = () => {
+    const quem = val('ed-mais');
+    if (!quem) return avisar('Escolhe quem acrescentar.', true);
+    fecharModal();
+    acaoAdmin('apiAcrescentarPessoa', id, quem);
+  };
+  $('#ed-guardar').onclick = () => {
+    const dados = { hora_inicio: val('ed-hora'), duracao_prevista_h: val('ed-dur'), vagas: val('ed-vagas'), horas_reais_h: val('ed-reais').trim() };
+    fecharModal();
+    acaoAdmin('apiEditarTarefa', id, dados);
+  };
+  $('#ed-cancelar').onclick = async () => { if (await confirmar('Cancelar esta tarefa? Deixa de contar pontos.', 'Cancelar tarefa')) { fecharModal(); acaoAdmin('apiCancelarTarefa', id); } };
+}
+function substituir(atribId) {
+  const novo = val('sub-' + atribId);
+  if (!novo) return avisar('Escolhe quem entra.', true);
+  fecharModal();
+  acaoAdmin('apiSubstituir', atribId, novo);
+}
+
+document.querySelectorAll('#abas button').forEach(b => { b.onclick = () => mudarAba(b.dataset.aba); });
+atualizarCabecalho();
+mudarAba('escala');
+</script>
+
+</body>
+</html>
