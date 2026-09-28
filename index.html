@@ -79,13 +79,20 @@
 var ENDERECO_API = "https://script.google.com/macros/s/AKfycbxfRFHXKBssE8fk5l3UCkL7NheUWLYdVyh4PABciZrwl9Hm0rVFdPxT82XW8_vJ6YS24A/exec";
 // O Google às vezes devolve uma página de erro passageira em vez da resposta. As consultas (que não mudam nada)
 // tentam de novo até 3 vezes; as ações não, para nunca gravarem a dobrar.
-function pedirServidor(nome, args, tentativas) {
+// Nenhum pedido fica pendurado: ao fim de 25 s desiste (as consultas tentam de novo; as ações avisam).
+var _emCurso = 0;
+function pedirServidor(nome, args, tentativas, ePreCarga) {
   tentativas = tentativas || 1;
-  const falhaDeRede = new Error('Sem ligação ao servidor. Verifica a internet e tenta outra vez.');
-  return fetch(ENDERECO_API, { method: 'POST', body: JSON.stringify({ fn: nome, args: args }) })
+  const consulta = tentativas > 1 || ePreCarga;
+  const falhaDeRede = new Error(consulta ? 'Sem ligação ao servidor. Verifica a internet e tenta outra vez.'
+    : 'O servidor não respondeu a tempo. Antes de repetir, confirma daqui a pouco se ficou feito.');
+  const parar = new AbortController(), relogio = setTimeout(() => parar.abort(), 25000);
+  if (!ePreCarga) _emCurso++;
+  const acabar = () => { clearTimeout(relogio); if (!ePreCarga) _emCurso--; };
+  return fetch(ENDERECO_API, { method: 'POST', body: JSON.stringify({ fn: nome, args: args }), signal: parar.signal })
     .then(r => r.ok ? r.text() : Promise.reject(falhaDeRede), () => Promise.reject(falhaDeRede))
-    .then(texto => { let r; try { r = JSON.parse(texto); } catch (e) { return Promise.reject(falhaDeRede); } return r; })
-    .catch(e => tentativas > 1 ? new Promise(ok => setTimeout(ok, 1200)).then(() => pedirServidor(nome, args, tentativas - 1)).then(v => ({ ok: true, valor: v })) : Promise.reject(e))
+    .then(texto => { acabar(); let r; try { r = JSON.parse(texto); } catch (e) { return Promise.reject(falhaDeRede); } return r; }, e => { acabar(); return Promise.reject(e); })
+    .catch(e => tentativas > 1 ? new Promise(ok => setTimeout(ok, 1200)).then(() => pedirServidor(nome, args, tentativas - 1, ePreCarga)).then(v => ({ ok: true, valor: v })) : Promise.reject(e))
     .then(r => { if (r.ok) return r.valor; throw new Error(r.erro); });
 }
 // Consultas: mostra logo o que este telemóvel já viu e atualiza quando chega a resposta.
@@ -109,7 +116,9 @@ function preCarregar() {
   if (S.sessao && !S.sessao.provisorio) { lista.push(['apiEu', [S.sessao.token]]); if (S.sessao.admin) lista.push(['apiGestao', [S.sessao.token]]); }
   const falta = lista.filter(([n, a]) => lerCache(chaveCache(n, a)) === null);
   _aPreCarregar = true;
-  falta.reduce((cadeia, [n, a]) => cadeia.then(() => pedirServidor(n, a, 2).then(v => { gravarCache(chaveCache(n, a), JSON.stringify(v)); _pedidoRecente[chaveCache(n, a)] = Date.now(); }, () => {})), Promise.resolve())
+  // Antes de cada passo espera que não haja pedidos da pessoa em curso, para não competir com eles.
+  const livre = () => new Promise(ok => { const ver = () => (_emCurso === 0 ? ok() : setTimeout(ver, 400)); ver(); });
+  falta.reduce((cadeia, [n, a]) => cadeia.then(livre).then(() => pedirServidor(n, a, 2, true).then(v => { gravarCache(chaveCache(n, a), JSON.stringify(v)); _pedidoRecente[chaveCache(n, a)] = Date.now(); }, () => {})), Promise.resolve())
     .then(() => { _aPreCarregar = false; });
 }
 window.addEventListener('load', () => setTimeout(preCarregar, 2500));
@@ -227,9 +236,18 @@ function segundaDestaSemana() {
   d.setDate(d.getDate() + (dia === 0 ? -6 : 1 - dia));
   return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
 }
+// Uma resposta atrasada de outro separador não pode ser desenhada por cima do separador atual.
+function mostrar(aba, html) {
+  if (S.aba !== aba) return false;
+  $('#conteudo').innerHTML = html;
+  return true;
+}
 async function carregarDados() {
   if (!S.segunda) S.segunda = segundaDestaSemana();
-  S.dados = await chamar('apiDados', S.segunda);
+  const pedido = S.pedidoDados = (S.pedidoDados || 0) + 1;
+  const dados = await chamar('apiDados', S.segunda);
+  if (pedido !== S.pedidoDados) return new Promise(() => {}); // chegou um pedido mais recente: este fica sem efeito
+  S.dados = dados;
   S.segunda = S.dados.segunda;
 }
 
@@ -274,7 +292,7 @@ async function verEscala() {
     });
   });
   if (!d.dias.some(x => x.tarefas.length)) h += '<p class="suave">Sem tarefas nesta semana.</p>';
-  $('#conteudo').innerHTML = h;
+  if (!mostrar('escala', h)) return;
 }
 
 // ---------- Horas ----------
@@ -286,7 +304,7 @@ async function verClassificacao() {
     h += '<tr class="clicavel" onclick="historico(\'' + idj(l.id) + '\')"' + (l.id === eu ? ' style="font-weight:600"' : '') + '><td>' + l.posicao + '</td><td>' + esc(l.nome) + '</td><td class="num">' + fmt(l.confirmados) +
       '</td><td class="num">' + fmt(l.agendados) + '</td><td class="num">' + fmt(l.total) + '</td><td class="num">' + (l.diferenca > 0 ? '+' : '') + fmt(l.diferenca) + '</td></tr>';
   });
-  $('#conteudo').innerHTML = h + '</table>';
+  if (!mostrar('classificacao', h + '</table>')) return;
 }
 async function historico(id) {
   await tentar(async () => {
@@ -307,7 +325,7 @@ async function verRegisto() {
     h += '<div class="cartao"><div class="linha"><strong>' + esc(l.acao) + '</strong><span class="suave">' + esc(l.quando.replace('T', ' ')) + '</span></div>' +
       '<span class="suave">' + esc(l.autor) + '</span>' + (det && det !== '{}' ? '<details><summary>Detalhe</summary><pre>' + esc(det) + '</pre></details>' : '') + '</div>';
   });
-  $('#conteudo').innerHTML = linhas.length ? h : '<p class="suave">Ainda não há registo.</p>';
+  if (!mostrar('registo', linhas.length ? h : '<p class="suave">Ainda não há registo.</p>')) return;
 }
 
 // ---------- Eu ----------
@@ -329,20 +347,20 @@ async function verEu() {
   h += '<h2>Marcar indisponibilidade</h2><div class="cartao"><div class="grelha"><div><label>De</label><input type="date" id="ind-de"></div><div><label>Até</label><input type="date" id="ind-ate"></div></div>' +
     '<label>Motivo (opcional)</label><input id="ind-motivo" maxlength="200"><button onclick="marcarIndisponivel()">Marcar</button></div>';
   h += '<h2>Quero fazer — semana de ' + esc(r.queroSemana.slice(8) + '/' + r.queroSemana.slice(5, 7)) + '</h2><div class="cartao escolhas"><p class="suave">Marca o que preferes fazer. O plano de domingo às ' + S.dados.cfg.hora_plano + 'h00 coloca-te primeiro' + (S.dados.cfg.limite_dia > 0 || S.dados.cfg.limite_semana > 0 ? ', dentro dos limites de tarefas fixas' : '') + '.</p>' +
-    r.opcoesQuero.map(o => '<label><input type="checkbox" ' + (o.marcado ? 'checked ' : '') + 'onchange="alternarQuero(this, \'' + idj(o.atividade_id) + '\', \'' + idj(o.data) + '\', \'' + idj(o.marcado) + '\')">' + esc(o.rotulo) + ' — ' + esc(o.nome) + '</label>').join('') + '</div>';
+    r.opcoesQuero.map(o => '<label><input type="checkbox" ' + (o.marcado ? 'checked ' : '') + 'data-marcado="' + idj(o.marcado) + '" onchange="alternarQuero(this, \'' + idj(o.atividade_id) + '\', \'' + idj(o.data) + '\')">' + esc(o.rotulo) + ' — ' + esc(o.nome) + '</label>').join('') + '</div>';
   h += '<h2>As minhas marcações</h2>' + (r.disponibilidade.length ? r.disponibilidade.map(d => '<div class="cartao linha"><span>' + esc(d.texto) + '</span><button class="pequeno secundario" onclick="removerDisp(\'' + idj(d.id) + '\')">Remover</button></div>').join('') : '<p class="suave">Nenhuma.</p>');
   h += '<h2>Mudar o meu PIN</h2><div class="cartao"><label>PIN atual</label><input id="mp-atual" type="password" inputmode="numeric" autocomplete="off">' +
     '<div class="grelha"><div><label>PIN novo (6 a 8 algarismos)</label><input id="mp-novo" type="password" inputmode="numeric" autocomplete="off"></div>' +
     '<div><label>Repete o PIN novo</label><input id="mp-rep" type="password" inputmode="numeric" autocomplete="off"></div></div>' +
     '<button onclick="mudarPin()">Mudar PIN</button></div>';
   h += '<p><button class="secundario" onclick="guardarSessao(null); render()">Sair</button></p>';
-  $('#conteudo').innerHTML = h;
+  if (!mostrar('eu', h)) return;
 }
 async function verEntrar() {
   if (!S.dados) await carregarDados();
-  $('#conteudo').innerHTML = '<h2>Entrar</h2><div class="cartao"><label>Nome</label><select id="entrar-id">' + S.dados.cadetes.map(c => '<option value="' + esc(c.id) + '">' + esc(c.nome) + '</option>').join('') + '</select>' +
+  if (!mostrar('eu', '<h2>Entrar</h2><div class="cartao"><label>Nome</label><select id="entrar-id">' + S.dados.cadetes.map(c => '<option value="' + esc(c.id) + '">' + esc(c.nome) + '</option>').join('') + '</select>' +
     '<label>PIN</label><input id="entrar-pin" type="password" inputmode="numeric" autocomplete="off"><button id="entrar-ok">Entrar</button>' +
-    '<p class="suave">Primeira vez? Entra com o PIN inicial que foi dito no grupo. A seguir escolhes o teu.</p></div>';
+    '<p class="suave">Primeira vez? Entra com o PIN inicial que foi dito no grupo. A seguir escolhes o teu.</p></div>')) return;
   $('#entrar-ok').onclick = () => tentar(async () => {
     const pin = $('#entrar-pin').value;
     guardarSessao(await chamar('apiEntrar', $('#entrar-id').value, pin));
@@ -352,11 +370,11 @@ async function verEntrar() {
 }
 // Com o PIN inicial (ou um PIN redefinido pelo administrador) só se pode escolher um PIN novo.
 function verEscolherPin() {
-  $('#conteudo').innerHTML = '<h2>Escolhe o teu PIN</h2><div class="cartao"><p>Olá, ' + esc(S.sessao.nome) + '. Antes de continuar, escolhe um PIN só teu, com 6 a 8 algarismos. Não o partilhes.</p>' +
+  if (!mostrar('eu', '<h2>Escolhe o teu PIN</h2><div class="cartao"><p>Olá, ' + esc(S.sessao.nome) + '. Antes de continuar, escolhe um PIN só teu, com 6 a 8 algarismos. Não o partilhes.</p>' +
     (S.pinAtual ? '' : '<label>PIN com que entraste</label><input id="mp-atual" type="password" inputmode="numeric" autocomplete="off">') +
     '<label>PIN novo</label><input id="mp-novo" type="password" inputmode="numeric" autocomplete="off">' +
     '<label>Repete o PIN novo</label><input id="mp-rep" type="password" inputmode="numeric" autocomplete="off">' +
-    '<button onclick="mudarPin()">Guardar o meu PIN</button> <button class="secundario" onclick="guardarSessao(null); render()">Sair</button></div>';
+    '<button onclick="mudarPin()">Guardar o meu PIN</button> <button class="secundario" onclick="guardarSessao(null); render()">Sair</button></div>')) return;
 }
 function mudarPin() {
   const atual = S.pinAtual || val('mp-atual'), novo = val('mp-novo');
@@ -381,11 +399,19 @@ function marcarIndisponivel() {
     render();
   });
 }
-function alternarQuero(caixa, atividadeId, data, marcado) {
-  tentar(async () => {
-    if (caixa.checked) await chamar('apiQueroFazer', token(), atividadeId, data);
-    else await chamar('apiRemoverDisponibilidade', token(), marcado);
-    render();
+// A caixa muda logo; a gravação corre em fila em segundo plano, sem recarregar o ecrã.
+// Se o servidor recusar, a caixa volta ao estado anterior e aparece o erro.
+function alternarQuero(caixa, atividadeId, data) {
+  const marcar = caixa.checked;
+  S.filaQuero = (S.filaQuero || Promise.resolve()).then(async () => {
+    try {
+      if (marcar) caixa.dataset.marcado = (await chamar('apiQueroFazer', token(), atividadeId, data)).id;
+      else if (caixa.dataset.marcado) { await chamar('apiRemoverDisponibilidade', token(), caixa.dataset.marcado); caixa.dataset.marcado = ''; }
+      avisar(marcar ? 'Marcado.' : 'Desmarcado.');
+    } catch (e) {
+      caixa.checked = !marcar;
+      avisar(e.message, true);
+    }
   });
 }
 function removerDisp(id) { tentar(async () => { await chamar('apiRemoverDisponibilidade', token(), id); render(); }); }
@@ -444,7 +470,7 @@ async function verGestao() {
 
   h += '<h2>Feriados</h2>' + g.feriados.map(f => '<div class="cartao linha"><span>' + esc(f.data) + ' — ' + esc(f.nome) + '</span><button class="pequeno secundario" onclick="removerFeriado(\'' + idj(f.id) + '\')">Remover</button></div>').join('') +
     '<div class="cartao"><div class="grelha"><div><label>Data</label><input type="date" id="fe-data"></div><div><label>Nome</label><input id="fe-nome"></div></div><button class="pequeno" onclick="adicionarFeriado()">Adicionar</button></div>';
-  $('#conteudo').innerHTML = h;
+  if (!mostrar('gestao', h)) return;
 }
 
 const val = id => $('#' + id).value;
