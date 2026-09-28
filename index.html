@@ -88,27 +88,44 @@ function pedirServidor(nome, args, tentativas) {
     .catch(e => tentativas > 1 ? new Promise(ok => setTimeout(ok, 1200)).then(() => pedirServidor(nome, args, tentativas - 1)).then(v => ({ ok: true, valor: v })) : Promise.reject(e))
     .then(r => { if (r.ok) return r.valor; throw new Error(r.erro); });
 }
-// Leituras públicas: mostra logo o que este telemóvel já viu e atualiza quando chega a resposta.
+// Consultas: mostra logo o que este telemóvel já viu e atualiza quando chega a resposta.
 // Qualquer ação (escrita) apaga esta memória, para o ecrã seguinte vir sempre do servidor.
-var LEITURAS = ['apiDados', 'apiRegisto', 'apiHistorico'], PREFIXO = 'escala-cache:', _pedidoRecente = {};
+var LEITURAS = ['apiDados', 'apiRegisto', 'apiHistorico', 'apiEu', 'apiGestao'], PREFIXO = 'escala-cache:', _pedidoRecente = {};
 function lerCache(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function gravarCache(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function limparCache() { try { Object.keys(localStorage).filter(k => k.indexOf(PREFIXO) === 0).forEach(k => localStorage.removeItem(k)); } catch (e) {} }
+function chaveCache(nome, args) { return PREFIXO + nome + ':' + JSON.stringify(args); }
+// Se a pessoa começou a escrever num campo, a atualização em segundo plano não redesenha o ecrã.
+var _aEscrever = false;
+document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#conteudo')) _aEscrever = true; });
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#abas')) _aEscrever = false; });
+// Depois de abrir a app (e depois de cada ação), vai buscando em segundo plano, um de cada vez,
+// o que os outros separadores vão precisar, para a mudança de separador ser imediata.
+var _aPreCarregar = false;
+function preCarregar() {
+  if (_aPreCarregar) return;
+  const lista = [['apiRegisto', []]];
+  if (S.segunda) lista.unshift(['apiDados', [S.segunda]]);
+  if (S.sessao && !S.sessao.provisorio) { lista.push(['apiEu', [S.sessao.token]]); if (S.sessao.admin) lista.push(['apiGestao', [S.sessao.token]]); }
+  const falta = lista.filter(([n, a]) => lerCache(chaveCache(n, a)) === null);
+  _aPreCarregar = true;
+  falta.reduce((cadeia, [n, a]) => cadeia.then(() => pedirServidor(n, a, 2).then(v => { gravarCache(chaveCache(n, a), JSON.stringify(v)); _pedidoRecente[chaveCache(n, a)] = Date.now(); }, () => {})), Promise.resolve())
+    .then(() => { _aPreCarregar = false; });
+}
+window.addEventListener('load', () => setTimeout(preCarregar, 2500));
 var google = { script: { get run() {
   let ok = () => {}, falha = () => {};
   const p = new Proxy({}, { get: (_, nome) => {
     if (nome === 'withSuccessHandler') return f => { ok = f; return p; };
     if (nome === 'withFailureHandler') return f => { falha = f; return p; };
     return (...args) => {
-      if (['apiEu', 'apiGestao', 'apiTextoSemana'].indexOf(nome) >= 0) {
-        pedirServidor(nome, args, 3).then(ok, falha); // consultas pessoais: sem memória, mas com novas tentativas
-        return;
-      }
+      if (nome === 'apiTextoSemana') { pedirServidor(nome, args, 3).then(ok, falha); return; }
       if (LEITURAS.indexOf(nome) < 0) {
-        pedirServidor(nome, args).then(v => { limparCache(); ok(v); }, falha); // ações: uma só tentativa
+        // ações: uma só tentativa; a seguir, memória limpa e novo pré-carregamento
+        pedirServidor(nome, args).then(v => { limparCache(); ok(v); setTimeout(preCarregar, 3000); }, falha);
         return;
       }
-      const k = PREFIXO + nome + ':' + JSON.stringify(args), guardado = lerCache(k);
+      const k = chaveCache(nome, args), guardado = lerCache(k);
       if (guardado === null) {
         pedirServidor(nome, args, 3).then(v => { gravarCache(k, JSON.stringify(v)); _pedidoRecente[k] = Date.now(); ok(v); }, falha);
         return;
@@ -116,13 +133,14 @@ var google = { script: { get run() {
       ok(JSON.parse(guardado));
       if (Date.now() - (_pedidoRecente[k] || 0) < 15000) return;
       _pedidoRecente[k] = Date.now();
+      const abaNoPedido = S.aba;
       pedirServidor(nome, args, 3).then(v => {
         const texto = JSON.stringify(v);
         if (texto === guardado) return;
         gravarCache(k, texto);
-        // Só redesenha ecrãs de consulta, e nunca por cima de uma janela aberta.
+        // Redesenha só se continuar no mesmo separador, sem janela aberta e sem estar a escrever.
         const aberto = !document.getElementById('modal').hidden || !document.getElementById('confirmacao').hidden;
-        if (['escala', 'classificacao', 'registo'].indexOf(S.aba) >= 0 && !aberto) render();
+        if (S.aba === abaNoPedido && !aberto && !_aEscrever) render();
       }, () => {});
     };
   } });
@@ -158,6 +176,8 @@ function chamar(fn, ...args) {
   });
 }
 function guardarSessao(s) {
+  // Ao sair, apaga o que ficou guardado neste telemóvel (só existe na versão do GitHub Pages).
+  if (!s && typeof limparCache === 'function') limparCache();
   S.sessao = s;
   try { s ? localStorage.setItem('sessao', JSON.stringify(s)) : localStorage.removeItem('sessao'); } catch (e) {}
   atualizarCabecalho();
@@ -200,7 +220,18 @@ async function render() {
   $('#conteudo').innerHTML = '<p class="suave">A carregar…</p>';
   await tentar(vistas[S.aba]);
 }
-async function carregarDados() { S.dados = await chamar('apiDados', S.segunda); S.segunda = S.dados.segunda; }
+// A segunda-feira desta semana, calculada no telemóvel: assim a Escala e as Horas pedem sempre a mesma semana
+// da mesma forma e partilham a memória.
+function segundaDestaSemana() {
+  const d = new Date(), dia = d.getDay();
+  d.setDate(d.getDate() + (dia === 0 ? -6 : 1 - dia));
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+async function carregarDados() {
+  if (!S.segunda) S.segunda = segundaDestaSemana();
+  S.dados = await chamar('apiDados', S.segunda);
+  S.segunda = S.dados.segunda;
+}
 
 function abrirModal(html) {
   $('#modal').innerHTML = '<div class="janela">' + html + '<p><button class="secundario" onclick="fecharModal()">Fechar</button></p></div>';
