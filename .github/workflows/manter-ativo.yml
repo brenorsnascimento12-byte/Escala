@@ -1,0 +1,12 @@
+# Uma consulta por semana à app, para o Supabase (plano gratuito) não pôr o projeto em pausa por falta de uso.
+name: Manter o servidor ativo
+on:
+  schedule:
+    - cron: '17 9 * * 1,4'   # segundas e quintas, 09:17 UTC
+  workflow_dispatch:
+jobs:
+  consulta:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sf -H "Content-Type: text/plain" --data '{"fn":"apiDados","args":[]}' https://ruuziodisxvgvlzvmfvf.supabase.co/functions/v1/api | head -c 80
