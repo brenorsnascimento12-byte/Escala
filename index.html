@@ -77,10 +77,15 @@
 <script>
 // google.script.run por fetch: o corpo vai como texto simples (sem pedido prévio de CORS) e sem cookies do Google.
 var ENDERECO_API = "https://script.google.com/macros/s/AKfycbxfRFHXKBssE8fk5l3UCkL7NheUWLYdVyh4PABciZrwl9Hm0rVFdPxT82XW8_vJ6YS24A/exec";
-function pedirServidor(nome, args) {
+// O Google às vezes devolve uma página de erro passageira em vez da resposta. As consultas (que não mudam nada)
+// tentam de novo até 3 vezes; as ações não, para nunca gravarem a dobrar.
+function pedirServidor(nome, args, tentativas) {
+  tentativas = tentativas || 1;
+  const falhaDeRede = new Error('Sem ligação ao servidor. Verifica a internet e tenta outra vez.');
   return fetch(ENDERECO_API, { method: 'POST', body: JSON.stringify({ fn: nome, args: args }) })
-    .then(r => { if (!r.ok) throw new Error('O servidor não respondeu (' + r.status + '). Tenta outra vez.'); return r.json(); })
-    .catch(e => { throw (e instanceof TypeError ? new Error('Sem ligação ao servidor. Verifica a internet e tenta outra vez.') : e); })
+    .then(r => r.ok ? r.text() : Promise.reject(falhaDeRede), () => Promise.reject(falhaDeRede))
+    .then(texto => { let r; try { r = JSON.parse(texto); } catch (e) { return Promise.reject(falhaDeRede); } return r; })
+    .catch(e => tentativas > 1 ? new Promise(ok => setTimeout(ok, 1200)).then(() => pedirServidor(nome, args, tentativas - 1)).then(v => ({ ok: true, valor: v })) : Promise.reject(e))
     .then(r => { if (r.ok) return r.valor; throw new Error(r.erro); });
 }
 // Leituras públicas: mostra logo o que este telemóvel já viu e atualiza quando chega a resposta.
@@ -95,19 +100,23 @@ var google = { script: { get run() {
     if (nome === 'withSuccessHandler') return f => { ok = f; return p; };
     if (nome === 'withFailureHandler') return f => { falha = f; return p; };
     return (...args) => {
+      if (['apiEu', 'apiGestao', 'apiTextoSemana'].indexOf(nome) >= 0) {
+        pedirServidor(nome, args, 3).then(ok, falha); // consultas pessoais: sem memória, mas com novas tentativas
+        return;
+      }
       if (LEITURAS.indexOf(nome) < 0) {
-        pedirServidor(nome, args).then(v => { limparCache(); ok(v); }, falha);
+        pedirServidor(nome, args).then(v => { limparCache(); ok(v); }, falha); // ações: uma só tentativa
         return;
       }
       const k = PREFIXO + nome + ':' + JSON.stringify(args), guardado = lerCache(k);
       if (guardado === null) {
-        pedirServidor(nome, args).then(v => { gravarCache(k, JSON.stringify(v)); _pedidoRecente[k] = Date.now(); ok(v); }, falha);
+        pedirServidor(nome, args, 3).then(v => { gravarCache(k, JSON.stringify(v)); _pedidoRecente[k] = Date.now(); ok(v); }, falha);
         return;
       }
       ok(JSON.parse(guardado));
       if (Date.now() - (_pedidoRecente[k] || 0) < 15000) return;
       _pedidoRecente[k] = Date.now();
-      pedirServidor(nome, args).then(v => {
+      pedirServidor(nome, args, 3).then(v => {
         const texto = JSON.stringify(v);
         if (texto === guardado) return;
         gravarCache(k, texto);
